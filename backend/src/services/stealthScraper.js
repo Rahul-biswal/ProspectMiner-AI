@@ -7,14 +7,20 @@ puppeteer.use(StealthPlugin());
 /**
  * Visit a business website stealthily and extract text content
  */
+const EDGE_PATH = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+
 async function scrapeBusinessWebsite(url) {
   if (!url || !url.startsWith('http')) {
     return { success: false, error: 'Invalid or missing URL', url };
   }
 
+  const fs = require('fs');
+  const executablePath = fs.existsSync(EDGE_PATH) ? EDGE_PATH : undefined;
+
   const browser = await puppeteer.launch({
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
+    headless: true,
+    executablePath,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-blink-features=AutomationControlled'],
   });
 
   const page = await browser.newPage();
@@ -38,10 +44,10 @@ async function scrapeBusinessWebsite(url) {
   });
 
   // Random pre-navigation delay to simulate human behaviour
-  await delay(randomBetween(300, 1500));
+  await delay(randomBetween(100, 400));
 
   try {
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 25000 });
     await delay(randomBetween(500, 1200));
 
     // Check for CAPTCHA indicators

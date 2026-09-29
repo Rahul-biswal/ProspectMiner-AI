@@ -58,18 +58,21 @@ async function runPipeline(jobId, query, location, maxResults) {
 
     console.log(`📋 ${leadDocs.length} raw leads saved for job ${jobId}`);
 
-    // Step 2: Process each lead
-    for (const lead of leadDocs) {
+    // Step 2: Process leads in parallel batches (8 at a time)
+    const CONCURRENCY = 8;
+
+    async function processLead(lead) {
       try {
         await Lead.findByIdAndUpdate(lead._id, { status: 'scraping' });
-        await broadcast();
 
-        const scrapedData = lead.websiteUrl
-          ? await scrapeBusinessWebsite(lead.websiteUrl)
-          : { success: false, error: 'No website', url: '' };
+        const [scrapedData, emailResult] = await Promise.all([
+          lead.websiteUrl
+            ? scrapeBusinessWebsite(lead.websiteUrl)
+            : Promise.resolve({ success: false, error: 'No website', url: '' }),
+          getEmailIntelligence(lead.websiteUrl),
+        ]);
 
         await Lead.findByIdAndUpdate(lead._id, { status: 'enriching' });
-        await broadcast();
 
         const enrichment = await enrichLead({ businessName: lead.businessName, query }, scrapedData);
 
@@ -81,16 +84,15 @@ async function runPipeline(jobId, query, location, maxResults) {
           enrichment
         );
 
-        const { emailFormats, mxRecordValid } = await getEmailIntelligence(lead.websiteUrl);
-
         await Lead.findByIdAndUpdate(lead._id, {
           ...enrichment, scoreBreakdown, qualificationScore,
-          emailFormats, mxRecordValid, status: 'completed',
+          emailFormats: emailResult.emailFormats,
+          mxRecordValid: emailResult.mxRecordValid,
+          status: 'completed',
         });
 
         await Job.findOneAndUpdate({ jobId }, { $inc: { processedLeads: 1 } });
         await broadcast();
-
         console.log(`✅ ${lead.businessName} → ${qualificationScore} (${scoreBreakdown.overallScore}/100)`);
       } catch (err) {
         console.error(`❌ ${lead.businessName}:`, err.message);
@@ -98,6 +100,13 @@ async function runPipeline(jobId, query, location, maxResults) {
         await Job.findOneAndUpdate({ jobId }, { $inc: { failedLeads: 1 } });
         await broadcast();
       }
+    }
+
+    // Chunk leads into batches and run each batch concurrently
+    for (let i = 0; i < leadDocs.length; i += CONCURRENCY) {
+      const batch = leadDocs.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(lead => processLead(lead)));
+      await broadcast();
     }
 
     await Job.findOneAndUpdate({ jobId }, { status: 'completed', completedAt: new Date() });

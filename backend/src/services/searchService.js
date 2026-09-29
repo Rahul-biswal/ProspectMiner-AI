@@ -7,14 +7,24 @@ puppeteer.use(StealthPlugin());
 /**
  * Launch a stealth browser instance
  */
+const EDGE_PATH = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
+
 async function launchBrowser() {
+  const fs = require('fs');
+  // Use system Edge if Puppeteer's bundled Chrome isn't installed
+  const executablePath = fs.existsSync(EDGE_PATH) ? EDGE_PATH : undefined;
+  if (executablePath) {
+    console.log('🌐 Using system Microsoft Edge for scraping');
+  }
   return puppeteer.launch({
-    headless: 'new',
+    headless: true,
+    executablePath,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
+      '--disable-blink-features=AutomationControlled',
       '--lang=en-US,en',
     ],
   });
@@ -29,20 +39,32 @@ async function extractPlaceDetails(browser, mapsUrl) {
   await page.setUserAgent(getRandomUserAgent());
   await page.setExtraHTTPHeaders({ 'Accept-Language': 'en-US,en;q=0.9' });
 
+  // Block unnecessary resources (Maps tiles, images, etc.) for massive speedup
+  await page.setRequestInterception(true);
+  page.on('request', (req) => {
+    const blockedTypes = ['image', 'stylesheet', 'font', 'media', 'websocket'];
+    if (blockedTypes.includes(req.resourceType())) {
+      req.abort();
+    } else {
+      req.continue();
+    }
+  });
+
   // Build full URL (handle both relative and absolute)
   const fullUrl = mapsUrl.startsWith('http')
     ? mapsUrl
     : `https://www.google.com${mapsUrl}`;
 
   try {
-    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto(fullUrl, { waitUntil: 'domcontentloaded', timeout: 25000 });
+    // Wait briefly for hydration
+    await new Promise(r => setTimeout(r, 1000));
 
     // Wait for the info panel to settle (the buttons with aria-labels appear)
     try {
-      await page.waitForSelector('button[aria-label], a[aria-label]', { timeout: 6000 });
+      await page.waitForSelector('button[aria-label], a[aria-label]', { timeout: 5000 });
     } catch (_) { /* proceed anyway */ }
 
-    await delay(randomBetween(1500, 2500));
 
     const details = await page.evaluate(() => {
       let website = '';
@@ -91,21 +113,28 @@ async function extractPlaceDetails(browser, mapsUrl) {
       }
 
       // ── Strategy 4: look for website links in action buttons ──
+      // ── Strategy 4: look for website links in action buttons ──
       if (!website) {
         const anchors = document.querySelectorAll('a[href^="http"]');
         for (const a of anchors) {
-          const lbl = (a.getAttribute('aria-label') || '').toLowerCase();
           const href = a.href || '';
+          // If it's a real external website link, grab it
           if (
             !href.includes('google.com') &&
             !href.includes('goo.gl') &&
-            !href.includes('maps') &&
-            (lbl.includes('website') || lbl.includes('web'))
+            !href.includes('gstatic.com') &&
+            !href.includes('youtube.com') &&
+            !href.includes('facebook.com') // unless they only have a FB page
           ) {
             website = href;
             break;
           }
         }
+      }
+
+      // Cleanup trailing UTM tags from websites
+      if (website && website.includes('?')) {
+        website = website.split('?')[0];
       }
 
       return { website, phone, address };
@@ -139,20 +168,23 @@ async function scrapeGoogleMaps(query, location, maxResults = 20) {
 
   try {
     await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-    await delay(randomBetween(2000, 3500));
 
     // Dismiss cookie/consent banners
     for (const selector of ['[aria-label="Accept all"]', '#L2AGLb', 'button[jsname="higCR"]']) {
       try {
         const btn = await page.$(selector);
-        if (btn) { await btn.click(); await delay(800); break; }
+        if (btn) { await btn.click(); await new Promise(r => setTimeout(r, 800)); break; }
       } catch (_) {}
     }
 
-    // Wait for results feed and scroll to load more
+    // Wait explicitly for the place cards to appear (guarantees results are loaded)
     try {
-      await page.waitForSelector('div[role="feed"], .Nv2PK', { timeout: 8000 });
-    } catch (_) { console.log('  Feed selector timed out, continuing...'); }
+      await page.waitForSelector('a[href*="/maps/place/"]', { timeout: 15000 });
+      // Extra pause to ensure all attributes and inner elements are populated
+      await new Promise(r => setTimeout(r, 1000));
+    } catch (_) {
+      console.log('  ⚠️ Feed selector timed out, no results found.');
+    }
 
     // Scroll to load up to maxResults
     const scrollTimes = Math.ceil(maxResults / 5);
@@ -161,9 +193,9 @@ async function scrapeGoogleMaps(query, location, maxResults = 20) {
         const feed = document.querySelector('div[role="feed"]');
         if (feed) feed.scrollBy(0, 600);
       });
-      await delay(700);
+      await delay(400);
     }
-    await delay(1000);
+    await delay(600);
 
     // Extract place links and names from the feed
     const placeItems = await page.evaluate((max) => {
@@ -222,18 +254,25 @@ async function scrapeGoogleMaps(query, location, maxResults = 20) {
 
     console.log(`  Found ${placeItems.length} listings from feed`);
 
-    // Now visit each place to extract phone, address, website
-    for (const item of placeItems) {
-      const details = await extractPlaceDetails(browser, item.mapsUrl);
-      leads.push({
-        businessName: item.businessName,
-        address: details.address,
-        phoneNumber: details.phone,
-        websiteUrl: details.website,
-        rating: item.rating,
-        reviewCount: item.reviewCount,
+    // Visit place pages in parallel batches of 8
+    const BATCH = 8;
+    for (let i = 0; i < placeItems.length; i += BATCH) {
+      const chunk = placeItems.slice(i, i + BATCH);
+      const results = await Promise.all(
+        chunk.map(item => extractPlaceDetails(browser, item.mapsUrl))
+      );
+      chunk.forEach((item, idx) => {
+        const details = results[idx];
+        leads.push({
+          businessName: item.businessName,
+          address: details.address,
+          phoneNumber: details.phone,
+          websiteUrl: details.website,
+          rating: item.rating,
+          reviewCount: item.reviewCount,
+        });
+        console.log(`  ✔ ${item.businessName} | 📞 ${details.phone || '—'} | 🌐 ${details.website || '—'}`);
       });
-      console.log(`  ✔ ${item.businessName} | 📞 ${details.phone || '—'} | 🌐 ${details.website || '—'} | 📍 ${details.address ? details.address.slice(0, 40) : '—'}`);
     }
 
   } catch (err) {

@@ -1,19 +1,20 @@
-const OpenAI = require('openai');
+/**
+ * scoringService.js — Local lead scoring (no OpenAI needed)
+ * Pure algorithmic scoring across 4 dimensions: 0–100 scale.
+ */
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-
-// --- Individual scoring functions ---
-
+// ── Score: Website quality (0–30) ───────────────────────────────────────────
 function scoreWebsiteQuality(scrapedData) {
-  let score = 0;
   if (!scrapedData || !scrapedData.success) return 0;
+  let score = 0;
   if (scrapedData.url?.startsWith('https')) score += 10;
-  if (scrapedData.content?.length > 500) score += 10;
-  if (scrapedData.content?.length > 2000) score += 5;
+  if (scrapedData.content?.length > 500)   score += 8;
+  if (scrapedData.content?.length > 2000)  score += 7;
   if (scrapedData.meta?.description?.length > 20) score += 5;
   return Math.min(30, score);
 }
 
+// ── Score: Keyword density match (0–25) ─────────────────────────────────────
 function scoreKeywordDensity(content = '', query = '') {
   if (!content || !query) return 0;
   const queryWords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
@@ -23,59 +24,68 @@ function scoreKeywordDensity(content = '', query = '') {
   return Math.round((hits / queryWords.length) * 25);
 }
 
+// ── Score: Business signals (0–15) ──────────────────────────────────────────
 function scoreBusinessSignals(lead) {
   let score = 0;
-  if (lead.rating && parseFloat(lead.rating) >= 4.0) score += 8;
+  if (lead.rating && parseFloat(lead.rating) >= 4.5) score += 10;
+  else if (lead.rating && parseFloat(lead.rating) >= 4.0) score += 7;
   else if (lead.rating && parseFloat(lead.rating) >= 3.5) score += 4;
-  if (lead.reviewCount && parseInt(lead.reviewCount) >= 10) score += 4;
+  if (lead.reviewCount && parseInt(lead.reviewCount) >= 50) score += 5;
+  else if (lead.reviewCount && parseInt(lead.reviewCount) >= 10) score += 3;
   if (lead.phoneNumber) score += 3;
   return Math.min(15, score);
 }
 
-async function scoreQueryMatchViaLLM(lead, enrichment) {
-  if (!enrichment || !enrichment.servicesOffered?.length) return 10; // neutral default
+// ── Score: Query ↔ enrichment alignment (0–30) ──────────────────────────────
+function scoreQueryMatch(lead, enrichment) {
+  if (!enrichment) return 10;
 
-  try {
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [{
-        role: 'user',
-        content: `Rate (0-30) how relevant this business is to the query "${lead.query}".
+  let score = 0;
+  const query = (lead.query || '').toLowerCase();
+  const queryWords = query.split(/\s+/).filter(w => w.length > 3);
 
-Business: ${lead.businessName}
-Services: ${enrichment.servicesOffered.join(', ')}
-Summary: ${enrichment.aiSummary}
+  // Services match
+  const allEnrichmentText = [
+    ...(enrichment.servicesOffered || []),
+    ...(enrichment.specializations || []),
+    enrichment.aiSummary || '',
+    enrichment.queryRelevanceExplanation || '',
+  ].join(' ').toLowerCase();
 
-Return JSON: {"score": number, "reason": "one sentence reason"}`,
-      }],
-      response_format: { type: 'json_object' },
-      temperature: 0.1,
-      max_tokens: 150,
-    });
-
-    const result = JSON.parse(response.choices[0].message.content);
-    return Math.min(30, Math.max(0, parseInt(result.score) || 10));
-  } catch (err) {
-    console.error('Query match scoring failed:', err.message);
-    return 10;
+  const hits = queryWords.filter(w => allEnrichmentText.includes(w)).length;
+  if (queryWords.length > 0) {
+    score += Math.round((hits / queryWords.length) * 18);
+  } else {
+    score += 10;
   }
+
+  // Services breadth bonus
+  const serviceCount = enrichment.servicesOffered?.length || 0;
+  if (serviceCount >= 5) score += 8;
+  else if (serviceCount >= 3) score += 5;
+  else if (serviceCount >= 1) score += 2;
+
+  // Insights bonus
+  const insightCount = enrichment.keyInsights?.length || 0;
+  if (insightCount >= 3) score += 4;
+  else if (insightCount >= 1) score += 2;
+
+  return Math.min(30, score);
 }
 
-/**
- * Score a lead and return breakdown + qualification
- */
+// ── Main ────────────────────────────────────────────────────────────────────
 async function scoreLead(lead, scrapedData, enrichment) {
-  const websiteQuality = scoreWebsiteQuality(scrapedData);
-  const keywordDensity = scoreKeywordDensity(scrapedData?.content, lead.query);
+  const websiteQuality  = scoreWebsiteQuality(scrapedData);
+  const keywordDensity  = scoreKeywordDensity(scrapedData?.content, lead.query);
   const businessSignals = scoreBusinessSignals(lead);
-  const queryMatchScore = await scoreQueryMatchViaLLM(lead, enrichment);
+  const queryMatchScore = scoreQueryMatch(lead, enrichment);
 
   const overallScore = websiteQuality + keywordDensity + businessSignals + queryMatchScore;
 
   let qualificationScore;
-  if (overallScore >= 75) qualificationScore = 'High';
-  else if (overallScore >= 45) qualificationScore = 'Medium';
-  else qualificationScore = 'Low';
+  if (overallScore >= 70)      qualificationScore = 'High';
+  else if (overallScore >= 40) qualificationScore = 'Medium';
+  else                         qualificationScore = 'Low';
 
   return {
     scoreBreakdown: { websiteQuality, keywordDensity, queryMatchScore, businessSignals, overallScore },

@@ -36,7 +36,7 @@ export default function LeadsPage({ jobId, showToast }) {
   return (
     <div className="container section">
       {/* Header */}
-      <div className="section-header">
+      <div className="section-header" style={{ marginBottom: '20px' }}>
         <div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: '800', marginBottom: '4px' }}>
             🎯 Leads
@@ -46,9 +46,21 @@ export default function LeadsPage({ jobId, showToast }) {
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{total} leads found</p>
         </div>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          <button id="export-csv-btn" className="btn btn-secondary btn-sm" onClick={() => handleExport('csv')}>⬇️ CSV</button>
-          <button id="export-xlsx-btn" className="btn btn-secondary btn-sm" onClick={() => handleExport('xlsx')}>⬇️ XLSX</button>
+      </div>
+
+      {/* Download Hub Card */}
+      <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', padding: '16px 24px', background: 'linear-gradient(to right, var(--bg-card), var(--bg-secondary))' }}>
+        <div>
+          <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '4px' }}>Download Hub</h3>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Export your enriched leads directly to your CRM or spreadsheet.</p>
+        </div>
+        <div style={{ display: 'flex', gap: '12px' }}>
+          <button id="export-csv-btn" className="btn btn-secondary" onClick={() => handleExport('csv')} style={{ background: 'var(--bg-card)', padding: '8px 16px' }}>
+            <span style={{ marginRight: '6px' }}>📊</span> Export CSV
+          </button>
+          <button id="export-xlsx-btn" className="btn btn-primary" onClick={() => handleExport('xlsx')} style={{ padding: '8px 16px' }}>
+            <span style={{ marginRight: '6px' }}>📈</span> Export Excel
+          </button>
         </div>
       </div>
 
