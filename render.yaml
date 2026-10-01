@@ -2,12 +2,10 @@ services:
   # ── Backend API (Node.js + Express) ──
   - type: web
     name: prospectminer-backend
-    env: node
+    env: docker
     region: oregon
     plan: starter          # $7/mo — needed for Puppeteer (free tier too limited)
     rootDir: backend
-    buildCommand: npm install
-    startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
