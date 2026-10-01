@@ -13,6 +13,8 @@ services:
         sync: false        # Set manually in Render dashboard
       - key: MONGODB_URI
         sync: false        # Set manually in Render dashboard
+      - key: GOOGLE_PLACES_API_KEY
+        value: AIzaSyAM94-rTo91TRxeEmskUAayCmCAZFXm2QM
       - key: PORT
         value: 3001
 
