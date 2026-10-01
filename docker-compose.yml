@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  mongodb:
+    image: mongo:6
+    container_name: prospectminer_db
+    restart: always
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "27017:27017"
+
+  redis:
+    image: redis:alpine
+    container_name: prospectminer_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  backend:
+    build: ./backend
+    container_name: prospectminer_backend
+    restart: always
+    environment:
+      - PORT=3001
+      - MONGODB_URI=mongodb://mongodb:27017/prospectminer
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your_super_secret_jwt_key_change_me
+      # IMPORTANT: Change this to your real OpenAI key before starting
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    depends_on:
+      - mongodb
+      - redis
+    # Map port just in case we need direct access, but nginx will proxy /api
+    ports:
+      - "3001:3001"
+    # To run chrome safely in docker
+    shm_size: '1gb'
+
+  frontend:
+    build: ./frontend
+    container_name: prospectminer_frontend
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  mongodb_data:
