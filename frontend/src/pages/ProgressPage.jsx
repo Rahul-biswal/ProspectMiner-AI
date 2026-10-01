@@ -10,26 +10,48 @@ export default function ProgressPage({ jobId, onViewLeads }) {
   const eventSourceRef = useRef(null);
 
   useEffect(() => {
+    let pollInterval = null;
+
     // Connect to SSE
     const es = new EventSource(api.getProgressUrl(jobId));
     eventSourceRef.current = es;
 
     es.onmessage = (e) => {
-      const data = JSON.parse(e.data);
-      setJob(data.job);
-      if (data.recentLeads) setRecentLeads(data.recentLeads);
-      if (data.job?.status === 'completed') {
-        fetchSample();
-        es.close();
-      }
+      try {
+        const data = JSON.parse(e.data);
+        setJob(data.job);
+        if (data.recentLeads) setRecentLeads(data.recentLeads);
+        if (data.job?.status === 'completed' || data.job?.status === 'failed') {
+          if (data.job.status === 'completed') fetchSample();
+          es.close();
+          clearInterval(pollInterval);
+        }
+      } catch (_) {}
     };
 
     es.onerror = () => es.close();
 
+    // Polling fallback — every 5s, check real job status from REST API
+    // This catches the "completed" state even if SSE is dropped by Render's proxy
+    pollInterval = setInterval(async () => {
+      try {
+        const jobData = await api.getJob(jobId);
+        setJob(jobData);
+        if (jobData?.status === 'completed' || jobData?.status === 'failed') {
+          if (jobData.status === 'completed') fetchSample();
+          clearInterval(pollInterval);
+          es.close();
+        }
+      } catch (_) {}
+    }, 5000);
+
     // Also poll job immediately
     api.getJob(jobId).then(setJob);
 
-    return () => es.close();
+    return () => {
+      es.close();
+      clearInterval(pollInterval);
+    };
   }, [jobId]);
 
   const fetchSample = async () => {

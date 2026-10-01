@@ -149,6 +149,7 @@ async function getJobProgress(req, res) {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable Nginx buffering on Render
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.flushHeaders();
 
@@ -162,7 +163,13 @@ async function getJobProgress(req, res) {
     res.write(`data: ${JSON.stringify({ job, recentLeads })}\n\n`);
   } catch (_) {}
 
+  // Heartbeat every 20s to keep connection alive through Render's proxy
+  const heartbeat = setInterval(() => {
+    try { res.write(': heartbeat\n\n'); } catch (_) { clearInterval(heartbeat); }
+  }, 20000);
+
   req.on('close', () => {
+    clearInterval(heartbeat);
     sseClients[jobId] = (sseClients[jobId] || []).filter(c => c !== res);
   });
 }
