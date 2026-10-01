@@ -8,7 +8,9 @@ const { protect } = require('./src/middleware/auth');
 
 const app = express();
 
-app.use(cors({ origin: '*' }));
+const FRONTEND_URL = process.env.FRONTEND_URL || 'https://prospect-miner-ai-ashy.vercel.app'; // Your live Vercel URL
+
+app.use(cors({ origin: FRONTEND_URL }));
 app.use(express.json());
 app.use('/exports', express.static('exports'));
 
@@ -23,7 +25,7 @@ app.get('/', (_req, res) => res.json({
   name: 'ProspectMiner AI API',
   status: '🟢 Running',
   version: '1.0.0',
-  frontend: 'http://localhost:5173',
+  frontend: FRONTEND_URL === '*' ? 'http://localhost:5173' : FRONTEND_URL,
   auth: {
     register: 'POST /api/auth/register',
     login: 'POST /api/auth/login',
