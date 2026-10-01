@@ -1,50 +1,46 @@
 /**
- * searchService.js — Google Places API powered lead search
- * Replaces Puppeteer scraping with reliable, cloud-safe API calls.
+ * searchService.js — Google Places API (New) powered lead search
+ * Uses the modern Places API v1 endpoints.
  */
 
 const PLACES_API_KEY = process.env.GOOGLE_PLACES_API_KEY;
-const BASE_URL = 'https://maps.googleapis.com/maps/api/place';
+const BASE_URL = 'https://places.googleapis.com/v1/places';
 
 /**
- * Perform a Google Places Text Search to get a list of matching places.
+ * Perform a Text Search using the new Places API.
  */
 async function textSearch(query, pageToken = null) {
-  const params = new URLSearchParams({
-    query,
-    key: PLACES_API_KEY,
-    ...(pageToken ? { pagetoken: pageToken } : {}),
+  const body = { textQuery: query, maxResultCount: 20 };
+  if (pageToken) body.pageToken = pageToken;
+
+  const response = await fetch(`${BASE_URL}:searchText`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Goog-Api-Key': PLACES_API_KEY,
+      'X-Goog-FieldMask': [
+        'places.id',
+        'places.displayName',
+        'places.formattedAddress',
+        'places.rating',
+        'places.userRatingCount',
+        'places.nationalPhoneNumber',
+        'places.websiteUri',
+        'nextPageToken',
+      ].join(','),
+    },
+    body: JSON.stringify(body),
   });
 
-  const url = `${BASE_URL}/textsearch/json?${params}`;
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Places Text Search failed: ${response.status}`);
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(`Places API (New) TextSearch failed: ${err?.error?.message || response.status}`);
+  }
   return response.json();
 }
 
 /**
- * Get phone number and website for a specific place by its place_id.
- */
-async function getPlaceDetails(placeId) {
-  const params = new URLSearchParams({
-    place_id: placeId,
-    fields: 'formatted_phone_number,website,formatted_address',
-    key: PLACES_API_KEY,
-  });
-
-  const url = `${BASE_URL}/details/json?${params}`;
-  try {
-    const response = await fetch(url);
-    if (!response.ok) return {};
-    const data = await response.json();
-    return data.result || {};
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Main function: search for business leads using Google Places API.
+ * Main function: search for business leads using Google Places API (New).
  */
 async function searchLeads(query, location, maxResults = 20) {
   if (!PLACES_API_KEY) {
@@ -52,60 +48,41 @@ async function searchLeads(query, location, maxResults = 20) {
   }
 
   const searchTerm = `${query} in ${location}`;
-  console.log(`\n🔍 Google Places API: "${searchTerm}" (max ${maxResults})`);
+  console.log(`\n🔍 Google Places API (New): "${searchTerm}" (max ${maxResults})`);
 
   const places = [];
   let pageToken = null;
-  let pages = 0;
-  const maxPages = Math.ceil(maxResults / 20); // Places API returns up to 20 per page
+  const maxPages = Math.ceil(maxResults / 20);
 
-  // Fetch pages until we have enough results
-  while (places.length < maxResults && pages < maxPages) {
-    // Google requires a short delay before using next_page_token
+  for (let page = 0; page < maxPages && places.length < maxResults; page++) {
+    // Google requires a short delay before using nextPageToken
     if (pageToken) await new Promise(r => setTimeout(r, 2000));
 
     const data = await textSearch(searchTerm, pageToken);
 
-    if (data.status === 'REQUEST_DENIED') {
-      throw new Error(`Places API denied: ${data.error_message}`);
-    }
+    if (!data.places || data.places.length === 0) break;
 
-    if (!data.results || data.results.length === 0) break;
-
-    places.push(...data.results);
-    pageToken = data.next_page_token || null;
-    pages++;
-
+    places.push(...data.places);
+    pageToken = data.nextPageToken || null;
     if (!pageToken) break;
   }
 
   const topPlaces = places.slice(0, maxResults);
   console.log(`  Found ${topPlaces.length} places from API`);
 
-  // Fetch details (phone + website) in parallel batches of 10
-  const BATCH = 10;
-  const leads = [];
-
-  for (let i = 0; i < topPlaces.length; i += BATCH) {
-    const chunk = topPlaces.slice(i, i + BATCH);
-    const detailResults = await Promise.all(
-      chunk.map(place => getPlaceDetails(place.place_id))
-    );
-
-    chunk.forEach((place, idx) => {
-      const details = detailResults[idx];
-      const lead = {
-        businessName: place.name || '',
-        address: details.formatted_address || place.formatted_address || '',
-        phoneNumber: details.formatted_phone_number || '',
-        websiteUrl: details.website || '',
-        rating: place.rating || null,
-        reviewCount: place.user_ratings_total || null,
-      };
-      leads.push(lead);
-      console.log(`  ✔ ${lead.businessName} | 📞 ${lead.phoneNumber || '—'} | 🌐 ${lead.websiteUrl || '—'}`);
-    });
-  }
+  // Map API response to lead schema — phone & website already included in Text Search response
+  const leads = topPlaces.map(place => {
+    const lead = {
+      businessName: place.displayName?.text || '',
+      address: place.formattedAddress || '',
+      phoneNumber: place.nationalPhoneNumber || '',
+      websiteUrl: place.websiteUri || '',
+      rating: place.rating || null,
+      reviewCount: place.userRatingCount || null,
+    };
+    console.log(`  ✔ ${lead.businessName} | 📞 ${lead.phoneNumber || '—'} | 🌐 ${lead.websiteUrl || '—'}`);
+    return lead;
+  });
 
   console.log(`✅ Final: ${leads.length} leads\n`);
   return leads;
