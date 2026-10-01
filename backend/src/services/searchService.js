@@ -7,15 +7,20 @@ puppeteer.use(StealthPlugin());
 /**
  * Launch a stealth browser instance
  */
+// Detect if running on Windows (local dev) to use system Edge
+const IS_WINDOWS = process.platform === 'win32';
 const EDGE_PATH = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 
 async function launchBrowser() {
-  const fs = require('fs');
-  // Use system Edge if Puppeteer's bundled Chrome isn't installed
-  const executablePath = fs.existsSync(EDGE_PATH) ? EDGE_PATH : undefined;
-  if (executablePath) {
-    console.log('🌐 Using system Microsoft Edge for scraping');
+  let executablePath;
+  if (IS_WINDOWS) {
+    const fs = require('fs');
+    if (fs.existsSync(EDGE_PATH)) {
+      executablePath = EDGE_PATH;
+      console.log('🌐 Using system Microsoft Edge for scraping');
+    }
   }
+  // On Linux/cloud: use Puppeteer bundled Chromium with full sandbox flags
   return puppeteer.launch({
     headless: true,
     executablePath,
@@ -26,6 +31,8 @@ async function launchBrowser() {
       '--disable-gpu',
       '--disable-blink-features=AutomationControlled',
       '--lang=en-US,en',
+      '--single-process',
+      '--no-zygote',
     ],
   });
 }

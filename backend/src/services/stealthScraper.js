@@ -7,6 +7,7 @@ puppeteer.use(StealthPlugin());
 /**
  * Visit a business website stealthily and extract text content
  */
+const IS_WINDOWS = process.platform === 'win32';
 const EDGE_PATH = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 
 async function scrapeBusinessWebsite(url) {
@@ -14,13 +15,16 @@ async function scrapeBusinessWebsite(url) {
     return { success: false, error: 'Invalid or missing URL', url };
   }
 
-  const fs = require('fs');
-  const executablePath = fs.existsSync(EDGE_PATH) ? EDGE_PATH : undefined;
+  let executablePath;
+  if (IS_WINDOWS) {
+    const fs = require('fs');
+    if (fs.existsSync(EDGE_PATH)) executablePath = EDGE_PATH;
+  }
 
   const browser = await puppeteer.launch({
     headless: true,
     executablePath,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-blink-features=AutomationControlled'],
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu', '--disable-blink-features=AutomationControlled', '--single-process', '--no-zygote'],
   });
 
   const page = await browser.newPage();
