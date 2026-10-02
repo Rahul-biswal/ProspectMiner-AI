@@ -58,8 +58,8 @@ async function runPipeline(jobId, query, location, maxResults) {
 
     console.log(`📋 ${leadDocs.length} raw leads saved for job ${jobId}`);
 
-    // Step 2: Process leads in parallel batches (8 at a time)
-    const CONCURRENCY = 8;
+    // Step 2: Process leads in parallel batches
+    const CONCURRENCY = 3; // Reduced from 8 to prevent Render CPU/RAM exhaustion
 
     async function processLead(lead) {
       try {
