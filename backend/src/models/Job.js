@@ -7,7 +7,7 @@ const jobSchema = new mongoose.Schema({
   maxResults:     { type: Number, default: 20 },
   status: {
     type: String,
-    enum: ['queued', 'running', 'completed', 'failed'],
+    enum: ['queued', 'running', 'completed', 'failed', 'cancelled'],
     default: 'queued',
   },
   totalLeads:     { type: Number, default: 0 },
