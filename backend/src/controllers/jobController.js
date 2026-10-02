@@ -104,6 +104,14 @@ async function runPipeline(jobId, query, location, maxResults) {
 
     // Chunk leads into batches and run each batch concurrently
     for (let i = 0; i < leadDocs.length; i += CONCURRENCY) {
+      // Check if job was cancelled
+      const currentJob = await Job.findOne({ jobId });
+      if (currentJob && currentJob.status === 'cancelled') {
+        console.log(`🛑 Job ${jobId} cancelled by user.`);
+        await broadcast();
+        return; // Stop pipeline
+      }
+
       const batch = leadDocs.slice(i, i + CONCURRENCY);
       await Promise.all(batch.map(lead => processLead(lead)));
       await broadcast();
@@ -224,4 +232,17 @@ async function listJobs(req, res) {
   res.json(jobs);
 }
 
-module.exports = { startJob, getJob, getJobProgress, getJobLeads, getLead, exportLeads, deleteJob, listJobs };
+// POST /api/jobs/:jobId/cancel
+async function cancelJob(req, res) {
+  const { jobId } = req.params;
+  const job = await Job.findOne({ jobId });
+  if (!job) return res.status(404).json({ error: 'Job not found' });
+  if (job.status === 'running' || job.status === 'queued') {
+    job.status = 'cancelled';
+    await job.save();
+    return res.json({ message: 'Job cancelled' });
+  }
+  res.status(400).json({ error: 'Job is not running' });
+}
+
+module.exports = { startJob, getJob, getJobProgress, getJobLeads, getLead, exportLeads, deleteJob, listJobs, cancelJob };

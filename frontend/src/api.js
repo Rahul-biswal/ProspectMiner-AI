@@ -92,6 +92,12 @@ export const api = {
       headers: authHeaders(),
     }),
 
+  cancelJob: (jobId) =>
+    apiFetch(`${API_BASE}/api/jobs/${jobId}/cancel`, {
+      method: 'POST',
+      headers: authHeaders(),
+    }),
+
   getExportUrl: (jobId, format = 'csv') => {
     const token = getToken();
     return `${API_BASE}/api/jobs/${jobId}/export?format=${format}&token=${token}`;

@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { api } from '../api';
 
-const STATUS_ICON = { completed: '✅', failed: '❌', enriching: '⏳', scraping: '🔍', pending: '⏸️', scoring: '🎯' };
+const STATUS_ICON = { completed: '✅', failed: '❌', enriching: '⏳', scraping: '🔍', pending: '⏸️', scoring: '🎯', cancelled: '🛑' };
 
 export default function ProgressPage({ jobId, onViewLeads }) {
   const [job, setJob] = useState(null);
@@ -37,7 +37,7 @@ export default function ProgressPage({ jobId, onViewLeads }) {
       try {
         const jobData = await api.getJob(jobId);
         setJob(jobData);
-        if (jobData?.status === 'completed' || jobData?.status === 'failed') {
+        if (['completed', 'failed', 'cancelled'].includes(jobData?.status)) {
           if (jobData.status === 'completed') fetchSample();
           clearInterval(pollInterval);
           es.close();
@@ -63,6 +63,18 @@ export default function ProgressPage({ jobId, onViewLeads }) {
   const isRunning = job && ['queued', 'running'].includes(job.status);
   const isDone = job?.status === 'completed';
   const isFailed = job?.status === 'failed';
+  const isCancelled = job?.status === 'cancelled';
+
+  const handleCancel = async () => {
+    if (window.confirm("Are you sure you want to stop this search? Leads already processed will be saved.")) {
+      try {
+        await api.cancelJob(jobId);
+        setJob({ ...job, status: 'cancelled' });
+      } catch (err) {
+        alert("Could not cancel job. It may have already finished.");
+      }
+    }
+  };
 
   const scoreCounts = allLeadsSample.reduce((acc, l) => {
     acc[l.qualificationScore] = (acc[l.qualificationScore] || 0) + 1;
@@ -78,8 +90,9 @@ export default function ProgressPage({ jobId, onViewLeads }) {
             {isRunning && <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--accent)', display: 'inline-block', animation: 'pulse 1.5s infinite' }} />}
             {isDone && <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--success)', display: 'inline-block' }} />}
             {isFailed && <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--danger)', display: 'inline-block' }} />}
+            {isCancelled && <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: 'var(--warning)', display: 'inline-block' }} />}
             <h2 style={{ fontSize: '1.5rem', fontWeight: '800' }}>
-              {isDone ? '🎉 Mining Complete' : isFailed ? '❌ Job Failed' : '⛏️ Mining In Progress...'}
+              {isDone ? '🎉 Mining Complete' : isFailed ? '❌ Job Failed' : isCancelled ? '🛑 Search Cancelled' : '⛏️ Mining In Progress...'}
             </h2>
           </div>
           {job && (
@@ -116,15 +129,22 @@ export default function ProgressPage({ jobId, onViewLeads }) {
         <div className="card" style={{ marginBottom: '20px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px', fontSize: '0.875rem' }}>
             <span style={{ color: 'var(--text-secondary)' }}>
-              {isRunning ? 'Processing leads...' : isDone ? 'All leads processed' : 'Job status: ' + job?.status}
+              {isRunning ? 'Processing leads...' : isDone ? 'All leads processed' : isCancelled ? 'Search stopped by user' : 'Job status: ' + job?.status}
             </span>
             <span style={{ fontWeight: '700', color: 'var(--accent-light)' }}>
               {job?.processedLeads || 0} / {job?.totalLeads || '?'}
             </span>
           </div>
           <div className="progress-container">
-            <div className="progress-bar" style={{ width: `${pct}%` }} />
+            <div className="progress-bar" style={{ width: `${pct}%`, background: isCancelled || isFailed ? 'var(--text-muted)' : '' }} />
           </div>
+          {isRunning && (
+            <div style={{ marginTop: '16px', textAlign: 'right' }}>
+              <button onClick={handleCancel} className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }}>
+                🛑 Cancel Search
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Live Leads Feed */}
@@ -151,16 +171,18 @@ export default function ProgressPage({ jobId, onViewLeads }) {
           </div>
         )}
 
-        {/* Done CTA */}
-        {isDone && (
-          <div className="card animate-fade-in" style={{ textAlign: 'center', padding: '40px', border: '1px solid rgba(16,185,129,0.2)' }}>
-            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🎉</div>
-            <h3 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '8px' }}>Your leads are ready!</h3>
+        {/* Done / Cancelled CTA */}
+        {(isDone || isCancelled) && (
+          <div className="card animate-fade-in" style={{ textAlign: 'center', padding: '40px', border: `1px solid ${isCancelled ? 'var(--warning)' : 'rgba(16,185,129,0.2)'}` }}>
+            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>{isDone ? '🎉' : '🛑'}</div>
+            <h3 style={{ fontSize: '1.4rem', fontWeight: '800', marginBottom: '8px' }}>
+              {isDone ? 'Your leads are ready!' : 'Search stopped.'}
+            </h3>
             <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
-              {job.processedLeads} leads enriched and scored. {job.failedLeads > 0 ? `${job.failedLeads} failed.` : ''}
+              {job.processedLeads} leads were enriched and scored. {job.failedLeads > 0 ? `${job.failedLeads} failed.` : ''}
             </p>
             <button id="view-leads-btn" className="btn btn-primary btn-lg" onClick={onViewLeads}>
-              View All Leads →
+              View {isCancelled ? 'Processed ' : ''}Leads →
             </button>
           </div>
         )}
