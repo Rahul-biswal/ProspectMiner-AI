@@ -49,7 +49,7 @@ export default function LeadsPage({ jobId, showToast }) {
       </div>
 
       {/* Download Hub Card */}
-      <div className="card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', padding: '16px 24px', background: 'linear-gradient(to right, var(--bg-card), var(--bg-secondary))' }}>
+      <div className="card download-hub" style={{ marginBottom: '24px', padding: '16px 24px', background: 'linear-gradient(to right, var(--bg-card), var(--bg-secondary))' }}>
         <div>
           <h3 style={{ fontSize: '1rem', fontWeight: '800', marginBottom: '4px' }}>Download Hub</h3>
           <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Export your enriched leads directly to your CRM or spreadsheet.</p>

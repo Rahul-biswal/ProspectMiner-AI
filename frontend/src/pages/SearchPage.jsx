@@ -149,7 +149,7 @@ export default function SearchPage({ onJobStarted, showToast }) {
           boxShadow: 'var(--shadow-card), 0 0 0 1px rgba(99,102,241,0.06)',
         }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <div className="search-grid">
               <div className="form-group">
                 <label className="form-label" htmlFor="query-input">
                   <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>

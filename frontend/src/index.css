@@ -149,7 +149,11 @@ body::before {
 /* ===================== LAYOUT ===================== */
 .app { display: flex; flex-direction: column; min-height: 100vh; position: relative; z-index: 1; }
 
-.container { max-width: 1200px; margin: 0 auto; padding: 0 28px; }
+.container { max-width: 1200px; margin: 0 auto; padding: 0 28px; width: 100%; }
+
+/* Responsive Utility Classes */
+.search-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.download-hub { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
 
 /* ===================== NAVBAR ===================== */
 .navbar {
@@ -366,11 +370,14 @@ body::before {
 
 /* ===================== TABLE ===================== */
 .table-container {
-  overflow-x: auto; border-radius: var(--radius-lg);
+  overflow-x: auto; 
+  -webkit-overflow-scrolling: touch;
+  border-radius: var(--radius-lg);
   border: 1px solid var(--border);
   background: var(--bg-card);
+  width: 100%;
 }
-.data-table { width: 100%; border-collapse: collapse; }
+.data-table { width: 100%; border-collapse: collapse; min-width: 700px; }
 .data-table th {
   padding: 11px 16px; text-align: left;
   font-size: 0.72rem; font-weight: 700; color: var(--text-muted);
@@ -580,13 +587,19 @@ body::before {
   .container { padding: 0 16px; }
   .stats-grid { grid-template-columns: repeat(2, 1fr); }
   .data-table th, .data-table td { padding: 10px 12px; }
-  .modal { border-radius: var(--radius-lg); }
+  .modal { border-radius: var(--radius-lg); margin: 16px; width: calc(100% - 32px); }
   .navbar-inner { height: 56px; }
   .user-name { display: none; }
   .toast { bottom: 16px; right: 16px; left: 16px; max-width: none; }
+  .search-grid { grid-template-columns: 1fr; }
+  .download-hub { flex-direction: column; align-items: flex-start; }
 }
 
 @media (max-width: 480px) {
   .nav-links { gap: 0; }
   .nav-link { padding: 6px 10px; font-size: 0.8rem; }
+  .stats-grid { grid-template-columns: 1fr; }
+  .btn-xl { padding: 14px 20px; font-size: 0.95rem; }
+  .card { padding: 16px; }
+  h1 { font-size: 2.2rem !important; }
 }
