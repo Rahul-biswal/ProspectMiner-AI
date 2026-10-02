@@ -4,7 +4,7 @@ const User = require('../models/User');
 /** Generate a signed JWT for a user */
 function signToken(userId) {
   return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+    expiresIn: process.env.JWT_EXPIRES_IN || '1h', // Default to 1 hour session timeout
   });
 }
 

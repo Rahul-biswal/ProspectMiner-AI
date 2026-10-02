@@ -15,64 +15,75 @@ function authHeaders(extra = {}) {
   };
 }
 
+// Global fetch wrapper to handle session expiration (401 Unauthorized)
+async function apiFetch(url, options = {}) {
+  const response = await fetch(url, options);
+  if (response.status === 401) {
+    localStorage.removeItem('pm_token');
+    localStorage.removeItem('pm_user');
+    window.location.href = '/login'; // Force redirect to login
+    throw new Error('Session expired');
+  }
+  return response.json();
+}
+
 export const api = {
   // ── Auth ──
   register: (name, email, password, inviteCode = '') =>
-    fetch(`${API_BASE}/api/auth/register`, {
+    apiFetch(`${API_BASE}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, email, password, inviteCode }),
-    }).then(r => r.json()),
-
+    }),
 
   login: (email, password) =>
-    fetch(`${API_BASE}/api/auth/login`, {
+    apiFetch(`${API_BASE}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
-    }).then(r => r.json()),
+    }),
 
   getMe: () =>
-    fetch(`${API_BASE}/api/auth/me`, {
+    apiFetch(`${API_BASE}/api/auth/me`, {
       headers: authHeaders(),
-    }).then(r => r.json()),
+    }),
 
   // ── Jobs (all protected) ──
   startJob: (query, location, maxResults) =>
-    fetch(`${API_BASE}/api/jobs/start`, {
+    apiFetch(`${API_BASE}/api/jobs/start`, {
       method: 'POST',
       headers: authHeaders(),
       body: JSON.stringify({ query, location, maxResults }),
-    }).then(r => r.json()),
+    }),
 
   getJob: (jobId) =>
-    fetch(`${API_BASE}/api/jobs/${jobId}`, {
+    apiFetch(`${API_BASE}/api/jobs/${jobId}`, {
       headers: authHeaders(),
-    }).then(r => r.json()),
+    }),
 
   listJobs: () =>
-    fetch(`${API_BASE}/api/jobs`, {
+    apiFetch(`${API_BASE}/api/jobs`, {
       headers: authHeaders(),
-    }).then(r => r.json()),
+    }),
 
   getLeads: (jobId, { score, page = 1, limit = 50 } = {}) => {
     const params = new URLSearchParams({ page, limit });
     if (score) params.set('score', score);
-    return fetch(`${API_BASE}/api/jobs/${jobId}/leads?${params}`, {
+    return apiFetch(`${API_BASE}/api/jobs/${jobId}/leads?${params}`, {
       headers: authHeaders(),
-    }).then(r => r.json());
+    });
   },
 
   getLead: (id) =>
-    fetch(`${API_BASE}/api/jobs/leads/${id}`, {
+    apiFetch(`${API_BASE}/api/jobs/leads/${id}`, {
       headers: authHeaders(),
-    }).then(r => r.json()),
+    }),
 
   deleteJob: (jobId) =>
-    fetch(`${API_BASE}/api/jobs/${jobId}`, {
+    apiFetch(`${API_BASE}/api/jobs/${jobId}`, {
       method: 'DELETE',
       headers: authHeaders(),
-    }).then(r => r.json()),
+    }),
 
   getExportUrl: (jobId, format = 'csv') => {
     const token = getToken();
