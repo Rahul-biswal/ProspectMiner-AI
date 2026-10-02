@@ -7,6 +7,7 @@ import SearchPage from './pages/SearchPage';
 import JobsPage from './pages/JobsPage';
 import ProgressPage from './pages/ProgressPage';
 import LeadsPage from './pages/LeadsPage';
+import ChangePasswordModal from './components/ChangePasswordModal';
 
 /* ── Theme hook ── */
 function useTheme() {
@@ -73,6 +74,14 @@ const IconLogOut = () => (
   </svg>
 );
 
+const IconKey = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4" />
+    <path d="m21 2-9.6 9.6" />
+    <circle cx="7.5" cy="15.5" r="5.5" />
+  </svg>
+);
+
 const IconSun = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="12" cy="12" r="4"/>
@@ -107,6 +116,7 @@ function AuthenticatedApp() {
   const [page, setPage] = useState('search');
   const [activeJobId, setActiveJobId] = useState(null);
   const [toast, setToast] = useState(null);
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -184,6 +194,9 @@ function AuthenticatedApp() {
             <div className="user-pill">
               <div className="avatar">{user?.name?.[0]?.toUpperCase() || '?'}</div>
               <span className="user-name">{user?.name}</span>
+              <button onClick={() => setIsPasswordModalOpen(true)} className="btn btn-ghost btn-sm" style={{ gap: '5px', padding: '6px' }} title="Change Password">
+                <IconKey />
+              </button>
               <button id="logout-btn" onClick={logout} className="btn btn-ghost btn-sm" style={{ gap: '5px' }}>
                 <IconLogOut />
                 <span style={{ fontSize: '0.8rem' }}>Sign out</span>
@@ -209,6 +222,11 @@ function AuthenticatedApp() {
           </span>
           {toast.msg}
         </div>
+      )}
+
+      {/* Password Modal */}
+      {isPasswordModalOpen && (
+        <ChangePasswordModal onClose={() => setIsPasswordModalOpen(false)} showToast={showToast} />
       )}
     </div>
   );

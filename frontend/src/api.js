@@ -48,6 +48,13 @@ export const api = {
       headers: authHeaders(),
     }),
 
+  changePassword: (oldPassword, newPassword) =>
+    apiFetch(`${API_BASE}/api/auth/change-password`, {
+      method: 'POST',
+      headers: authHeaders(),
+      body: JSON.stringify({ oldPassword, newPassword }),
+    }),
+
   // ── Jobs (all protected) ──
   startJob: (query, location, maxResults) =>
     apiFetch(`${API_BASE}/api/jobs/start`, {

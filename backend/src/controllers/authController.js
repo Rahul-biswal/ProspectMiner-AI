@@ -78,4 +78,29 @@ async function getMe(req, res) {
   res.json({ user: { id: req.user._id, name: req.user.name, email: req.user.email } });
 }
 
-module.exports = { register, login, getMe };
+// POST /api/auth/change-password (protected)
+async function changePassword(req, res) {
+  try {
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) {
+      return res.status(400).json({ error: 'Old password and new password are required.' });
+    }
+    if (newPassword.length < 8) {
+      return res.status(400).json({ error: 'New password must be at least 8 characters.' });
+    }
+
+    const user = await User.findById(req.user._id).select('+password');
+    if (!user || !(await user.comparePassword(oldPassword))) {
+      return res.status(401).json({ error: 'Incorrect old password.' });
+    }
+
+    user.password = newPassword;
+    await user.save(); // Model pre-save hook will hash the new password
+
+    res.json({ message: 'Password updated successfully.' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+}
+
+module.exports = { register, login, getMe, changePassword };
